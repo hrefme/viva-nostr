@@ -1,6 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <style> 
+      body, html { 
+        margin: 0; 
+        padding: 0; 
+        background-color:#171717 
+     } 
+      
+       .jw-settings-sharing, .jw-icon-pip, .jw-rightclick { 
+                 display: none !important; 
+             } 
+             </style> 
+       <meta name="viewport" content="width=device-width, initial-scale=1.0" /> 
+       <script src="https://ssl.p.jwpcdn.com/player/v/8.28.0/jwplayer.js"></script> 
+
+         <script> 
+             jwplayer.key = 'XSuP4qMl+9tK17QNb+4+th2Pm9AWgMO/cYH8CI0HGGr7bdjo'; 
+         </script> 
+      
+         <script type="text/javascript"> 
+             var urlSearchParams = new URLSearchParams(window.location.search); 
+              
+             var getU = urlSearchParams.get('get') || ''; 
+             
+             const getParameter = name => (new URLSearchParams(window.location.search)).get(name) || ''; 
+         </script> 
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,34 +35,39 @@
       content="Web site created using create-react-app"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+<link href="https://vjs.zencdn.net/7.20.3/video-js.min.css" rel="stylesheet" />
+<script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+  </head>
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
     <title>React App</title>
   </head>
   <body>
+    test
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+    <script type="text/JavaScript"> 
+      var jwp = jwplayer("players"); 
+                            jwp.setup({ 
+                                playlist: [{ 
+                                    "sources": [ 
+                                        { 
+                                            "default": true, 
+                                            "type": "hls", 
+                                            "file": atob(getU), 
+                                            "label": "0" 
+                                        } 
+                                    ] 
+                                }], 
+                               
+                                width: "100%", 
+                                height: "100%", 
+                                autostart: false, 
+                                mute: false 
+                            }); 
+                             
+    </script>
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>
