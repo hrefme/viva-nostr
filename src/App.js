@@ -1,93 +1,191 @@
 import "./App.css";
-import { generatePrivateKey, getEventHash, getPublicKey, relayInit, signEvent } from "nostr-tools";
-import { useEffect, useState } from "react";
+import { relayInit, nip19 } from "nostr-tools";
+import { useEffect, useState, useRef } from "react";
+import { BrowserRouter as Router, Route, Routes, Link, useParams } from 'react-router-dom';
+import channelMap from './channelMap.json';
 
-function App() {
-  // eslint-disable-next-line
-  const [sk, setSk] = useState(generatePrivateKey());
-  const [pk, setPk] = useState(getPublicKey(sk));
+function StreamPage() {
+  const { channelNameOrNoteId } = useParams();
+  const [channel, setChannel] = useState(null);
   const [relay, setRelay] = useState(null);
+  const [relayStatus, setRelayStatus] = useState("Desconectado");
   const [pubStatus, setPubStatus] = useState("");
-  const [newEvent, setNewEvent] = useState(null);
-  const [events, setEvents] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [streamKeys, setStreamKeys] = useState({});
+  const playerRef = useRef(null);
+  const relayUrl = "wss://relay.primal.net";
+
+  useEffect(() => {
+    const foundChannel = channelMap.channels.find(ch => ch.name === channelNameOrNoteId);
+    if (foundChannel) {
+      setChannel(foundChannel);
+    } else {
+      setChannel({ name: channelNameOrNoteId, noteId: channelNameOrNoteId, title: "Stream Directo" });
+    }
+  }, [channelNameOrNoteId]);
 
   useEffect(() => {
     const connectRelay = async () => {
-      const relay = relayInit("wss://relay.damus.io");
-      await relay.connect();
-
+      setRelayStatus("Conectando...");
+      const relay = relayInit(relayUrl);
+      
       relay.on("connect", () => {
         setRelay(relay);
+        setRelayStatus("Conectado");
       });
+      
       relay.on("error", () => {
-        console.log("failed to connect");
+        setRelayStatus("Error de conexión");
       });
+      
+      relay.on("disconnect", () => {
+        setRelayStatus("Desconectado");
+      });
+
+      try {
+        await relay.connect();
+      } catch (error) {
+        setRelayStatus("Error de conexión");
+      }
     };
 
     connectRelay();
-  });
+  }, []);
 
-  var event = {
-    kind: 1,
-    pubkey: pk,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [],
-    content: "We are testing nostr in react"
-  }
+  useEffect(() => {
+    if (relay && channel) {
+      handleFetchStream();
+    }
+  }, [relay, channel]);
 
-  event.id = getEventHash(event);
-  event.sig = signEvent(event, sk);
+  const handleFetchStream = async () => {
+    try {
+      let hexId;
+      try {
+        const { data } = nip19.decode(channel.noteId);
+        hexId = data;
+      } catch {
+        hexId = channel.noteId;
+      }
 
-  const publishEvent = (event) => {
-    const pub = relay.publish(event);
+      const events = await relay.list([
+        {
+          kinds: [1],
+          ids: [hexId],
+        }
+      ]);
 
-    pub.on('ok', () => {
-      setPubStatus("our event is published");
-    })
-    pub.on('failed', reason => {
-      setPubStatus(`failed to publish message ${reason}` )
-    })
-  }
+      if (events.length > 0) {
+        let content = events[0].content;
+        let decodedContent;
+        let keys = {};
 
-  const getEvent = async () => {
-    var sub = relay.sub([{
-      kinds: [1],
-      authors: [pk]
-    }])
-    sub.on('event', event => {
-      setNewEvent(event)
-    })
-  }
+        if (content.startsWith('https://')) {
+          decodedContent = content;
+        } else {
+          const parts = content.split('&');
+          const encodedUrl = parts[0];
+          decodedContent = atob(encodedUrl);
 
-  const getEvents = async () => {
-    var events =  await relay.list([{
-      kinds: [1]
-    }])
-    setEvents(events);
+          parts.forEach(part => {
+            if (part.startsWith('key=')) {
+              keys.key = atob(part.split('=')[1]);
+            } else if (part.startsWith('key2=')) {
+              keys.key2 = atob(part.split('=')[1]);
+            }
+          });
+        }
+
+        setStreamUrl(decodedContent);
+        setStreamKeys(keys);
+        setPubStatus("URL de stream encontrada y decodificada");
+
+        if (window.jwplayer && playerRef.current) {
+          const jwp = window.jwplayer(playerRef.current);
+          jwp.setup({
+            file: decodedContent,
+            type: 'dash',
+            drm: {
+              clearkey: {
+                keyId: keys.key,
+                key: keys.key2
+              }
+            },
+            width: "100%",
+            height: "100%",
+            aspectratio: "16:9",
+            stretching: "uniform",
+            autostart: false,
+            mute: false
+          });
+
+          jwp.on('error', function(e) {
+            setPubStatus("Error de reproducción: " + e.message);
+          });
+        }
+      } else {
+        setPubStatus("No se encontró la nota de stream especificada");
+      }
+    } catch (error) {
+      setPubStatus("Error al buscar nota de stream");
+    }
+  };
+
+  if (!channel) {
+    return <div>Cargando...</div>;
   }
 
   return (
-    <div className="viva-nostr">
-      <div className="card">
-      <h1>¡Viva Nostr!</h1>
-      <p>private key: {sk} </p>
-      <p>public key: {pk} </p>
+    <div className="bg-gray-900 min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6 w-full max-w-2xl">
+        <h1 className="text-3xl font-bold text-center text-purple-400 mb-4">{channel.title}</h1>
+        <p className={`text-center font-semibold ${
+          relayStatus === "Conectado" ? "text-green-400" :
+          relayStatus === "Desconectado" ? "text-red-400" :
+          relayStatus === "Conectando..." ? "text-yellow-400" :
+          "text-gray-400"
+        }`}>
+          Estado del relay: {relayStatus}
+        </p>
       </div>
-      {relay ? (
-        <p> Connect to {relay.url}</p>
-      ) : (
-        <p> Couldn not connect to relay </p>
-      )}
-      <button onClick={(() => publishEvent(event))}>Publish Event</button>
-      <p>Publish status {pubStatus}</p>
-      <button onClick={(() => getEvent())}>Subscribe Event</button>
-      {newEvent ? <p>Subscribed event content: {newEvent.content} {pubStatus}</p> : <p> No new event </p>}
-      <button onClick={(() => getEvents())}>Load feed</button>  
-      {events !== null && 
-      events.map((event) => 
-      <p key={event.sig} style={{borderStyle: 'ridge', padding: 10}}>{event.content}</p>
-      )}
+      
+      <div className="w-full max-w-2xl aspect-video mb-4" style={{position: 'relative'}}>
+        <div ref={playerRef} id="players" style={{
+          position: 'absolute', 
+          top: '0', 
+          left: '0', 
+          width: '100%', 
+          height: '100%', 
+          maxWidth: '100vw', 
+          maxHeight: '56.25vw', 
+          backgroundColor: 'black'
+        }}></div>
+      </div>
+      
+      <p className="text-gray-300 mb-4">Estado de publicación: <span className="font-semibold">{pubStatus}</span></p>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <div>
+        <nav>
+          <ul>
+            {channelMap.channels.map((channel, index) => (
+              <li key={index}>
+                <Link to={`/${channel.name}`}>{channel.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <Routes>
+          <Route path="/:channelNameOrNoteId" element={<StreamPage />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
