@@ -115,7 +115,8 @@ function StreamPage() {
             aspectratio: "16:9",
             stretching: "uniform",
             autostart: false,
-            mute: false
+            mute: false,
+            analytics: { enabled: false }
           };
 
           if (Object.keys(keys).length > 0) {
